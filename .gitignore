@@ -1,0 +1,15 @@
+# Generated data - recreate with generate_data.py / pipeline.py
+*.duckdb
+*.sqlite
+data/csv/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store

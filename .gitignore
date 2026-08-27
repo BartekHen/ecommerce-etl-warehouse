@@ -3,6 +3,7 @@
 *.sqlite
 data/csv/
 powerbi_export/*.parquet
+insights/*.md
 
 # Python
 __pycache__/

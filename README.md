@@ -154,7 +154,18 @@ python -m src.pipeline
 # 3. Explore the warehouse
 python3 -c "import duckdb; duckdb.connect('warehouse.duckdb').sql('SELECT * FROM fact_sales LIMIT 5').show()"
 # or open sql/analytics_queries.sql and run individual queries against warehouse.duckdb
+
+# 4. (optional) Get an AI-written summary of the analytics queries
+export ANTHROPIC_API_KEY=your-key-here   # from console.anthropic.com
+python -m src.ai_insights
 ```
+
+Step 4 runs every query in `sql/analytics_queries.sql`, sends the results to
+Claude, and asks for a short plain-English summary of trends, best/worst
+performers, and anomalies. The summary is printed to the terminal and saved
+to `insights/summary_<date>.md`. If `ANTHROPIC_API_KEY` isn't set, it exits
+with a clear message instead of crashing - the rest of the pipeline doesn't
+depend on this step.
 
 ## Power BI Dashboard
 

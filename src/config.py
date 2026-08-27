@@ -23,6 +23,9 @@ OLTP_SCHEMA_PATH = SQL_DIR / "oltp_schema.sql"
 WAREHOUSE_SCHEMA_PATH = SQL_DIR / "warehouse_schema.sql"
 ANALYTICS_QUERIES_PATH = SQL_DIR / "analytics_queries.sql"
 
+# --- AI insights ---
+INSIGHTS_DIR = BASE_DIR / "insights"
+
 # --- Data generation settings ---
 RANDOM_SEED = 42
 NUM_CUSTOMERS = 300

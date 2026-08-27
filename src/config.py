@@ -26,6 +26,9 @@ ANALYTICS_QUERIES_PATH = SQL_DIR / "analytics_queries.sql"
 # --- AI insights ---
 INSIGHTS_DIR = BASE_DIR / "insights"
 
+# --- README chart images ---
+DOCS_IMAGES_DIR = BASE_DIR / "docs" / "images"
+
 # --- Data generation settings ---
 RANDOM_SEED = 42
 NUM_CUSTOMERS = 300

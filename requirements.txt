@@ -1,3 +1,4 @@
 pandas
 duckdb
 anthropic
+matplotlib

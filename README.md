@@ -135,6 +135,13 @@ src/
   transform.py              Transformer: DataFrames -> star schema
   load.py                   Loader: DataFrames -> DuckDB (transaction + indexes)
   pipeline.py               runs Extract -> Transform -> Load
+  export_powerbi.py         exports the warehouse to Parquet for Power BI
+  ai_insights.py            asks Claude to summarize the analytics queries
+  generate_charts.py        renders the charts embedded below
+docs/
+  images/                 chart PNGs embedded in this README
+powerbi_export/           Parquet export (generated, gitignored)
+insights/                 AI-written summaries (generated, gitignored)
 requirements.txt
 ```
 
@@ -240,3 +247,14 @@ See `sql/analytics_queries.sql` for the full, runnable versions:
 - How does revenue trend quarter over quarter?
 - Which product category has the best profit margin?
 - Who are the top 5 customers by lifetime revenue?
+
+Two of them, charted straight from a real pipeline run:
+
+![Revenue by month](docs/images/revenue_by_month.png)
+
+![Top 10 products by revenue](docs/images/top_products.png)
+
+Regenerate these after any pipeline run with:
+```bash
+python -m src.generate_charts
+```

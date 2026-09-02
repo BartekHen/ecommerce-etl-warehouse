@@ -1,27 +1,38 @@
 # E-Commerce OLTP -> OLAP ETL Pipeline
 
-A small, self-contained data engineering portfolio project. It generates a
-synthetic e-commerce database in the style of a real OLTP system, then runs
-an ETL pipeline that extracts, transforms and loads that data into an
-analytical data warehouse (star schema) built with DuckDB.
+I built this while putting together a portfolio for data/BI internship
+applications. The idea: take a normal online-store database - the kind
+that just records orders one at a time - and turn it into something you
+can actually run analytics on, then put a real dashboard on top of it in
+Power BI.
 
-The goal of this project is to demonstrate, in plain readable Python, the
-core ideas behind data warehousing: normalization vs. denormalization,
-OLTP vs. OLAP, star schemas, surrogate keys, transactions/ACID, and basic
-parallelism for I/O-bound work.
+There's no real company or real data behind this. I wrote a small
+generator that spits out a fake but reasonably realistic e-commerce
+dataset (customers, products, orders, order items), so I'd have something
+to work with without needing an actual business's data.
 
-## OLTP vs. OLAP
+## Why there are two databases here, not one
 
-| | OLTP (source) | OLAP (warehouse) |
+The source database (SQLite) is normalized - every category name, every
+customer, every product lives in exactly one place, and other tables just
+point to it by ID. That's how you want a database that's constantly
+handling new orders: fast, safe writes, no duplicated data to keep in
+sync.
+
+The warehouse (DuckDB) is the opposite on purpose. It's built for reading,
+not writing - specifically for aggregating over lots of rows at once
+("what did we sell last quarter by category?"). To make that fast and
+easy to query, data gets deliberately duplicated - a product's category
+name gets copied right onto the product row instead of making every query
+join back to a categories table.
+
+| | OLTP (SQLite) | OLAP (DuckDB) |
 |---|---|---|
-| Purpose | Run the day-to-day store (create orders, add customers) | Analyze historical sales |
-| Engine | SQLite | DuckDB |
-| Schema | Normalized (3NF) - `categories`, `channels`, `customers`, `products`, `orders`, `order_items` | Star schema - `dim_date`, `dim_product`, `dim_customer`, `dim_channel`, `fact_sales` |
-| Data shape | Many small related tables, no repeated data | Few wide tables, some data intentionally repeated (denormalized) |
-| Typical query | "Insert one new order" | "Total revenue by category and month" |
-| Optimized for | Fast, safe writes of single records | Fast aggregation over millions of rows |
+| Job | record orders as they happen | answer questions about sales history |
+| Shape | normalized, lots of small tables | star schema, few wide tables |
+| Typical query | insert one order | sum revenue by month and channel |
 
-## Star schema
+## The star schema
 
 ```mermaid
 erDiagram
@@ -75,58 +86,51 @@ erDiagram
     dim_channel ||--o{ fact_sales : ""
 ```
 
-`fact_sales` has one row per order item (its grain). `dim_product.category`
-is denormalized: it is pulled in from the OLTP `categories` table during
-the transform step, so analytical queries never need to join a separate
-category table.
+One row in `fact_sales` = one order item. That `category` field on
+`dim_product` is the denormalized bit I mentioned above - it gets pulled
+in from the OLTP `categories` table during the transform step.
 
-## The pipeline
+## How the pipeline actually runs
 
-```
-data/generate_data.py          src/pipeline.py
-  (stdlib only)          -->     Extract  -->  Transform  -->  Load
-        |                          |               |             |
-   data/oltp.sqlite          reads SQLite    builds star      writes
-   data/csv/*.csv            into pandas     schema in        warehouse.duckdb
-                              DataFrames      pandas           in one
-                              (in parallel                     transaction,
-                              via threads)                     then indexes
-```
+1. **`data/generate_data.py`** builds the fake OLTP database from
+   scratch - stdlib only, no pandas. It also dumps everything to CSV,
+   mostly so I could eyeball the raw data in a spreadsheet while
+   debugging.
+2. **`src/extract.py`** pulls all six OLTP tables into pandas. The
+   `extract_all()` method reads them concurrently with a thread pool,
+   which actually helps here - reading from a database is mostly waiting
+   on I/O, not CPU work, so Python's GIL doesn't get in the way the way
+   it would for something CPU-bound.
+3. **`src/transform.py`** builds the four dimension tables (giving each
+   row a surrogate key, gluing the category name onto products) and the
+   fact table, computing `gross_amount`, `discount_amount`, `net_amount`,
+   `cost_amount`, and `margin` for every line item. Only `completed`
+   orders count - cancelled and pending ones get filtered out here.
+4. **`src/load.py`** writes everything into DuckDB inside a single
+   transaction, so a failed load can't leave the warehouse half-updated.
+   Indexes on the fact table's foreign keys get built after the data is
+   in, not before - building them first would mean paying the index-
+   update cost on every single row insert instead of once at the end.
 
-1. **Generate** (`data/generate_data.py`) - builds a fresh, normalized
-   SQLite database of customers, products, orders and order items, using
-   only the Python standard library. Also exports each table to CSV.
-2. **Extract** (`src/extract.py`) - the `Extractor` class reads all six
-   OLTP tables into pandas DataFrames. `extract_all()` reads them
-   concurrently with `ThreadPoolExecutor`, since reading from a database is
-   I/O-bound (see the docstring in that file for why threads help there
-   despite the GIL).
-3. **Transform** (`src/transform.py`) - the `Transformer` class builds the
-   four dimension tables (assigning surrogate keys, denormalizing category
-   onto products) and the fact table (joining in surrogate keys, computing
-   `gross_amount`, `discount_amount`, `net_amount`, `cost_amount`,
-   `margin`). Only orders with status `completed` are counted as sales.
-4. **Load** (`src/load.py`) - the `Loader` class creates the warehouse
-   schema in DuckDB and loads every table inside a single transaction
-   (`BEGIN` / `COMMIT` / `ROLLBACK`), so the warehouse is never left
-   half-updated. Indexes on `fact_sales`' foreign key columns are created
-   afterwards, once, instead of being maintained on every row insert.
+## Why these tools
 
-## Tech stack
+I used **DuckDB** for the warehouse mainly because I wanted to try a
+proper columnar/analytical engine without needing to spin up a server -
+it's basically SQLite's philosophy (single file, zero setup) applied to
+OLAP instead of OLTP. **SQLite** felt like the obvious pick for the
+source side for the same reason: no server to configure, just a file.
+**pandas** does the actual data shuffling in the extract/transform steps
+because writing that by hand in raw SQL would've been a lot more code for
+the same result.
 
-- **Python 3** - standard library only for the data generator
-- **pandas** - extract and transform
-- **DuckDB** - the analytical warehouse (OLAP, columnar, SQL)
-- **SQLite** - the OLTP source database
-
-## Repository structure
+## Repo layout
 
 ```
 data/
   generate_data.py       synthetic OLTP data generator (stdlib only)
 sql/
-  oltp_schema.sql         OLTP DDL (reference)
-  warehouse_schema.sql    star schema DDL, executed by src/load.py
+  oltp_schema.sql         OLTP DDL, for reference
+  warehouse_schema.sql    star schema DDL, run by src/load.py
   analytics_queries.sql   example OLAP queries
 src/
   config.py               paths and settings
@@ -138,52 +142,57 @@ src/
   export_powerbi.py         exports the warehouse to Parquet for Power BI
   ai_insights.py            asks Claude to summarize the analytics queries
   generate_charts.py        renders the charts embedded below
+powerbi/
+  ecommerce-dashboard.pbix  the actual Power BI report
 docs/
-  images/                 chart PNGs embedded in this README
+  images/                 screenshots and chart PNGs used in this README
 powerbi_export/           Parquet export (generated, gitignored)
 insights/                 AI-written summaries (generated, gitignored)
 requirements.txt
 ```
 
-## Quick start
+## Running it yourself
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# 1. Generate the synthetic OLTP database
+# 1. generate the fake OLTP database
 python -m data.generate_data
 
-# 2. Run the ETL pipeline (OLTP SQLite -> OLAP DuckDB)
+# 2. run the ETL pipeline (SQLite -> DuckDB)
 python -m src.pipeline
 
-# 3. Explore the warehouse
+# 3. poke at the warehouse
 python3 -c "import duckdb; duckdb.connect('warehouse.duckdb').sql('SELECT * FROM fact_sales LIMIT 5').show()"
-# or open sql/analytics_queries.sql and run individual queries against warehouse.duckdb
+# or open sql/analytics_queries.sql and run the queries in there directly
 
-# 4. (optional) Get an AI-written summary of the analytics queries
+# 4. optional: get an AI-written summary of the analytics queries
 export ANTHROPIC_API_KEY=your-key-here   # from console.anthropic.com
 python -m src.ai_insights
 ```
 
-Step 4 runs every query in `sql/analytics_queries.sql`, sends the results to
-Claude, and asks for a short plain-English summary of trends, best/worst
-performers, and anomalies. The summary is printed to the terminal and saved
-to `insights/summary_<date>.md`. If `ANTHROPIC_API_KEY` isn't set, it exits
-with a clear message instead of crashing - the rest of the pipeline doesn't
-depend on this step.
+That last step sends the results of every query in `sql/analytics_queries.sql`
+to Claude and asks for a short summary - trends, best/worst performers,
+anything that looks off. It prints the summary and saves it to
+`insights/summary_<date>.md`. If you don't have an API key set it just
+exits with a message instead of blowing up - the rest of the pipeline
+doesn't need it.
 
-## Power BI Dashboard
+## The Power BI dashboard
 
-The warehouse loads straight into Power BI Desktop as a set of Parquet
-files - no direct DuckDB connector needed. The finished report has four
-pages: an overview with KPI cards and a revenue trend, plus dedicated
-pages for products, sales channels, and customers/geography.
+I ended up building four pages instead of cramming everything onto one -
+it got messy fast otherwise. There's an overview page with a few KPI
+cards and a revenue trend, and then separate pages for products, sales
+channels, and customers/geography, with the year and channel filters
+synced across all of them so picking a year once on the overview actually
+filters the other pages too.
 
-The finished report is in [`powerbi/ecommerce-dashboard.pbix`](powerbi/ecommerce-dashboard.pbix)
-- open it in Power BI Desktop (free) to explore it live, including the DAX
-measures and page relationships.
+The actual report file is in
+[`powerbi/ecommerce-dashboard.pbix`](powerbi/ecommerce-dashboard.pbix) -
+open it in Power BI Desktop (it's free) to poke around the DAX measures
+and the model directly.
 
 **Overview**
 ![Overview page](docs/images/powerbi/overview.png)
@@ -197,64 +206,68 @@ measures and page relationships.
 **Customers**
 ![Customers page](docs/images/powerbi/customers.png)
 
-### Rebuilding it
+### Rebuilding it from scratch
 
-1. Run the pipeline, then export the warehouse to Parquet:
+1. Run the pipeline, then export it to Parquet:
    ```bash
    python -m src.pipeline
    python -m src.export_powerbi
    ```
-   This writes one `.parquet` file per table into `powerbi_export/`
-   (`dim_date.parquet`, `dim_product.parquet`, `dim_customer.parquet`,
-   `dim_channel.parquet`, `fact_sales.parquet`).
-2. Open **Power BI Desktop** -> **Get Data** -> **Parquet**, and load each
-   of the five files.
-3. Go to the **Model** view and connect `fact_sales` to each dimension on
-   its key column (`date_key`, `product_key`, `customer_key`,
-   `channel_key`) - same shape as the star schema diagram above. Power BI
-   usually detects these automatically from the matching column names.
-4. Add four measures on `fact_sales` (right-click the table -> New measure):
+   This drops one `.parquet` file per table into `powerbi_export/`.
+2. In Power BI Desktop: **Get Data -> Parquet**, and load all five files
+   one at a time.
+3. Switch to the **Model** view and check that `fact_sales` is connected
+   to each dimension on its key column (`date_key`, `product_key`,
+   `customer_key`, `channel_key`). Power BI usually figures these out on
+   its own since the column names match on both sides.
+4. Add four measures on `fact_sales` (right-click it -> New measure):
    ```dax
    Total Revenue = SUM(fact_sales[net_amount])
    Total Margin = SUM(fact_sales[margin])
    Margin % = DIVIDE([Total Margin], [Total Revenue])
    Total Units = SUM(fact_sales[quantity])
    ```
-5. Build the four pages:
-   - **Overview** - the 4 measures as cards, a line chart of revenue by
-     month (`dim_date.year` + `month` on the X-axis), and slicers on
-     `dim_date.year` and `dim_channel.name`
-   - **Products** - top 10 products by revenue, and revenue/margin by
+5. Build the pages:
+   - **Overview** - the four measures as cards, a line chart of revenue
+     by month, and slicers on `dim_date.year` and `dim_channel.name`
+   - **Products** - top 10 products by revenue, plus revenue/margin per
      category
-   - **Channels** - margin by channel, and a revenue trend per channel
-     (`dim_channel.name` on the Legend)
-   - **Customers** - revenue by country, and a table of the top 5
-     customers by lifetime revenue - filter Top N on `customer_id`, not
-     `name`, since names aren't guaranteed unique in the synthetic data
-   - Sync the two slicers across all four pages (View -> Sync slicers) so
-     filtering on Overview affects the rest of the report
+   - **Channels** - margin by channel, plus a revenue trend with channel
+     on the legend
+   - **Customers** - revenue by country, plus a table of the top 5
+     customers by lifetime revenue
+   - Sync the two slicers across all four pages (View -> Sync slicers)
 
-Re-run the pipeline and export any time the underlying data changes, then
-hit **Refresh** in Power BI to pick up the new Parquet files.
+A couple of things tripped me up while building this that are worth
+knowing if you're doing the same thing: Power BI sometimes sorts a new
+chart's axis by value instead of by date, which makes a perfectly normal
+trend line look like nonsense until you fix it under "Sort axis". And
+filtering a "top N customers" table by name doesn't work if two different
+customers happen to share a name (which happens here, since the fake data
+generator only has ~20 first and last names to pick from) - filter on
+`customer_id` instead, since that's guaranteed unique.
 
-## Example analytical questions this warehouse answers
+Re-run the pipeline and export whenever the underlying data changes, then
+hit Refresh in Power BI to pick up the new files.
 
-See `sql/analytics_queries.sql` for the full, runnable versions:
+## Questions this warehouse can answer
 
-- What is total revenue and margin per sales channel, per month?
-- Which 10 products generate the most revenue?
-- What is the average order value per country?
-- How does revenue trend quarter over quarter?
-- Which product category has the best profit margin?
-- Who are the top 5 customers by lifetime revenue?
+Full queries are in `sql/analytics_queries.sql`:
 
-Two of them, charted straight from a real pipeline run:
+- Revenue and margin per sales channel, per month
+- Which 10 products bring in the most revenue
+- Average order value per country
+- Quarter-over-quarter revenue trend
+- Which product category has the best margin
+- Top 5 customers by lifetime revenue
+
+Two of them, charted from an actual pipeline run:
 
 ![Revenue by month](docs/images/revenue_by_month.png)
 
 ![Top 10 products by revenue](docs/images/top_products.png)
 
-Regenerate these after any pipeline run with:
+Regenerate these with:
 ```bash
 python -m src.generate_charts
 ```

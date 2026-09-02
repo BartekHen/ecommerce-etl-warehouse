@@ -158,8 +158,24 @@ python3 -c "import duckdb; duckdb.connect('warehouse.duckdb').sql('SELECT * FROM
 
 ## Power BI Dashboard
 
-The warehouse can be loaded straight into Power BI Desktop as a set of
-Parquet files - no direct DuckDB connector needed.
+The warehouse loads straight into Power BI Desktop as a set of Parquet
+files - no direct DuckDB connector needed. The finished report has four
+pages: an overview with KPI cards and a revenue trend, plus dedicated
+pages for products, sales channels, and customers/geography.
+
+**Overview**
+![Overview page](docs/images/powerbi/overview.png)
+
+**Products**
+![Products page](docs/images/powerbi/products.png)
+
+**Channels**
+![Channels page](docs/images/powerbi/channels.png)
+
+**Customers**
+![Customers page](docs/images/powerbi/customers.png)
+
+### Rebuilding it
 
 1. Run the pipeline, then export the warehouse to Parquet:
    ```bash
@@ -169,24 +185,35 @@ Parquet files - no direct DuckDB connector needed.
    This writes one `.parquet` file per table into `powerbi_export/`
    (`dim_date.parquet`, `dim_product.parquet`, `dim_customer.parquet`,
    `dim_channel.parquet`, `fact_sales.parquet`).
-2. Open **Power BI Desktop** -> **Get Data** -> **Folder**, and point it at
-   the `powerbi_export/` folder (or use the **Parquet** connector on each
-   file individually if you prefer picking them one by one).
-3. Load all five tables, then go to the **Model** view and draw the
-   relationships yourself: `fact_sales.date_key` -> `dim_date.date_key`,
-   `fact_sales.product_key` -> `dim_product.product_key`,
-   `fact_sales.customer_key` -> `dim_customer.customer_key`,
-   `fact_sales.channel_key` -> `dim_channel.channel_key`. Each is a
-   one-dimension-to-many-fact relationship, same shape as the Mermaid
-   diagram above.
-4. Build a few visuals, e.g.:
-   - Line chart: `dim_date.month_name` (X-axis) vs. `SUM(fact_sales.net_amount)`
-   - Bar chart: `dim_product.name` (X-axis) vs. `SUM(fact_sales.net_amount)`,
-     sorted descending, top 10
-   - Bar chart: `dim_channel.name` (X-axis) vs. `SUM(fact_sales.margin)`
+2. Open **Power BI Desktop** -> **Get Data** -> **Parquet**, and load each
+   of the five files.
+3. Go to the **Model** view and connect `fact_sales` to each dimension on
+   its key column (`date_key`, `product_key`, `customer_key`,
+   `channel_key`) - same shape as the star schema diagram above. Power BI
+   usually detects these automatically from the matching column names.
+4. Add four measures on `fact_sales` (right-click the table -> New measure):
+   ```dax
+   Total Revenue = SUM(fact_sales[net_amount])
+   Total Margin = SUM(fact_sales[margin])
+   Margin % = DIVIDE([Total Margin], [Total Revenue])
+   Total Units = SUM(fact_sales[quantity])
+   ```
+5. Build the four pages:
+   - **Overview** - the 4 measures as cards, a line chart of revenue by
+     month (`dim_date.year` + `month` on the X-axis), and slicers on
+     `dim_date.year` and `dim_channel.name`
+   - **Products** - top 10 products by revenue, and revenue/margin by
+     category
+   - **Channels** - margin by channel, and a revenue trend per channel
+     (`dim_channel.name` on the Legend)
+   - **Customers** - revenue by country, and a table of the top 5
+     customers by lifetime revenue - filter Top N on `customer_id`, not
+     `name`, since names aren't guaranteed unique in the synthetic data
+   - Sync the two slicers across all four pages (View -> Sync slicers) so
+     filtering on Overview affects the rest of the report
 
-Re-run both commands above any time the underlying data changes, then hit
-**Refresh** in Power BI to pick up the new Parquet files.
+Re-run the pipeline and export any time the underlying data changes, then
+hit **Refresh** in Power BI to pick up the new Parquet files.
 
 ## Example analytical questions this warehouse answers
 

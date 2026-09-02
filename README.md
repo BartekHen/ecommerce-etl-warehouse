@@ -163,6 +163,10 @@ files - no direct DuckDB connector needed. The finished report has four
 pages: an overview with KPI cards and a revenue trend, plus dedicated
 pages for products, sales channels, and customers/geography.
 
+The finished report is in [`powerbi/ecommerce-dashboard.pbix`](powerbi/ecommerce-dashboard.pbix)
+- open it in Power BI Desktop (free) to explore it live, including the DAX
+measures and page relationships.
+
 **Overview**
 ![Overview page](docs/images/powerbi/overview.png)
 

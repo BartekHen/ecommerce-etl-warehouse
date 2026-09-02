@@ -92,25 +92,32 @@ in from the OLTP `categories` table during the transform step.
 
 ## How the pipeline actually runs
 
-1. **`data/generate_data.py`** builds the fake OLTP database from
-   scratch - stdlib only, no pandas. It also dumps everything to CSV,
-   mostly so I could eyeball the raw data in a spreadsheet while
-   debugging.
-2. **`src/extract.py`** pulls all six OLTP tables into pandas. The
-   `extract_all()` method reads them concurrently with a thread pool,
-   which actually helps here - reading from a database is mostly waiting
-   on I/O, not CPU work, so Python's GIL doesn't get in the way the way
-   it would for something CPU-bound.
-3. **`src/transform.py`** builds the four dimension tables (giving each
-   row a surrogate key, gluing the category name onto products) and the
-   fact table, computing `gross_amount`, `discount_amount`, `net_amount`,
-   `cost_amount`, and `margin` for every line item. Only `completed`
-   orders count - cancelled and pending ones get filtered out here.
-4. **`src/load.py`** writes everything into DuckDB inside a single
-   transaction, so a failed load can't leave the warehouse half-updated.
-   Indexes on the fact table's foreign keys get built after the data is
-   in, not before - building them first would mean paying the index-
-   update cost on every single row insert instead of once at the end.
+1. **[`data/generate_data.py`](data/generate_data.py)** builds the fake
+   OLTP database from scratch - stdlib only, no pandas. It also dumps
+   everything to CSV, mostly so I could eyeball the raw data in a
+   spreadsheet while debugging.
+2. **[`src/extract.py`](src/extract.py)** pulls all six OLTP tables into
+   pandas. The `extract_all()` method reads them concurrently with a
+   thread pool, which actually helps here - reading from a database is
+   mostly waiting on I/O, not CPU work, so Python's GIL doesn't get in
+   the way the way it would for something CPU-bound.
+3. **[`src/transform.py`](src/transform.py)** builds the four dimension
+   tables (giving each row a surrogate key, gluing the category name
+   onto products) and the fact table, computing `gross_amount`,
+   `discount_amount`, `net_amount`, `cost_amount`, and `margin` for every
+   line item. Only `completed` orders count - cancelled and pending ones
+   get filtered out here.
+4. **[`src/load.py`](src/load.py)** writes everything into DuckDB inside
+   a single transaction, so a failed load can't leave the warehouse
+   half-updated. Indexes on the fact table's foreign keys get built
+   after the data is in, not before - building them first would mean
+   paying the index-update cost on every single row insert instead of
+   once at the end.
+
+The code itself is kept pretty bare on comments - the reasoning above is
+the "why", the files themselves are short enough to just read for the
+"how". `src/transform.py` in particular is worth a look if you want to
+see the actual pandas merges behind the star schema.
 
 ## Why these tools
 

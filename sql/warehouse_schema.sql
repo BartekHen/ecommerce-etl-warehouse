@@ -1,16 +1,9 @@
--- DDL (Data Definition Language) for the OLAP data warehouse, in DuckDB.
+-- DDL for the OLAP warehouse (DuckDB), star schema: one fact table
+-- (fact_sales) around four denormalized dimensions. Unlike the OLTP
+-- source, dim_product stores the category NAME directly instead of a
+-- category_id, so queries never need to JOIN back to a categories table.
 --
--- This is a STAR SCHEMA: one central fact table (fact_sales) surrounded by
--- small, denormalized dimension tables (dim_date, dim_product, dim_customer,
--- dim_channel). Unlike the OLTP source, dimensions here are intentionally
--- DENORMALIZED - for example dim_product stores the category NAME directly
--- instead of a category_id that points to another table. This means an
--- analytical query like "revenue by category" needs zero JOINs against a
--- separate categories table, which is exactly what makes OLAP (OnLine
--- Analytical Processing) queries fast and simple to write.
---
--- This script is executed by src/load.py every time the pipeline runs.
--- "CREATE TABLE IF NOT EXISTS" makes it safe to run again and again.
+-- Executed by src/load.py on every pipeline run.
 
 CREATE TABLE IF NOT EXISTS dim_date (
     date_key   INTEGER PRIMARY KEY,  -- format YYYYMMDD, e.g. 20250314
@@ -61,7 +54,5 @@ CREATE TABLE IF NOT EXISTS fact_sales (
     margin          DECIMAL(12, 2) NOT NULL   -- net_amount - cost_amount
 );
 
--- NOTE: indexes on the foreign key columns of fact_sales are created
--- separately, AFTER the bulk data load (see src/load.py). Building them
--- after loading avoids the overhead of updating an index on every single
--- row insert - see the comment in load.py for the full explanation.
+-- Indexes on fact_sales' foreign key columns are created separately,
+-- after the bulk load - see src/load.py.

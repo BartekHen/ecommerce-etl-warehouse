@@ -1,24 +1,8 @@
 """
-Generates a synthetic e-commerce OLTP (OnLine Transaction Processing)
-database, using ONLY the Python standard library (random, sqlite3, csv,
-datetime, pathlib). No pandas, no third-party packages.
+Builds a synthetic e-commerce OLTP database in SQLite (stdlib only, no
+pandas) and exports each table to CSV.
 
-What it does:
-  1. Creates a fresh SQLite database with a normalized (3NF) schema -
-     see sql/oltp_schema.sql for the same schema written out as DDL.
-  2. Fills it with fake but realistic-looking customers, products,
-     orders, etc.
-  3. Also exports every table to a CSV file in data/csv/, purely so you
-     can open the raw data in a spreadsheet if you want to.
-
-This script is RE-RUNNABLE: every time you run it, it deletes the old
-database file and CSV files first and builds everything from scratch.
-A fixed random seed (see src/config.py) means you get the same "random"
-data every time, which makes the pipeline's output predictable and easy
-to demo.
-
-Run it with:
-    python -m data.generate_data
+Run with: python -m data.generate_data
 """
 
 import csv
@@ -28,8 +12,6 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
-# Allow "python -m data.generate_data" to find the src package when run
-# from the project root.
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from src.config import (
@@ -40,8 +22,6 @@ from src.config import (
     RANDOM_SEED,
     SQLITE_DB_PATH,
 )
-
-# --- Reference lists used to build fake data -------------------------------
 
 CATEGORY_NAMES = [
     "Electronics",
@@ -56,7 +36,6 @@ CATEGORY_NAMES = [
 
 CHANNEL_NAMES = ["Web Store", "Mobile App", "Marketplace", "Retail Store"]
 
-# (city, country) pairs so customers land in realistic city/country combos
 CITY_COUNTRY_PAIRS = [
     ("Warsaw", "Poland"),
     ("Krakow", "Poland"),
@@ -103,13 +82,12 @@ PRODUCT_NOUNS_BY_CATEGORY = {
     "Grocery": ["Coffee Beans", "Olive Oil", "Pasta", "Honey", "Tea Set"],
 }
 
+# "completed" 3x out of 5 -> roughly 60% of orders, rest pending/cancelled
 ORDER_STATUSES = ["completed", "completed", "completed", "pending", "cancelled"]
-# ^ repeating "completed" 3 times makes it roughly 60% of orders, which is
-# a realistic split between successful, still-open and cancelled orders.
 
 
 def create_schema(connection):
-    """Create all six OLTP tables (empty). Matches sql/oltp_schema.sql."""
+    """Create the six OLTP tables (matches sql/oltp_schema.sql)."""
     cursor = connection.cursor()
     cursor.executescript(
         """
@@ -173,7 +151,6 @@ def create_schema(connection):
 
 
 def insert_categories(connection):
-    """Insert one row per category name. Returns the list of category ids."""
     cursor = connection.cursor()
     category_ids = []
     for category_id, name in enumerate(CATEGORY_NAMES, start=1):
@@ -187,7 +164,6 @@ def insert_categories(connection):
 
 
 def insert_channels(connection):
-    """Insert one row per sales channel. Returns the list of channel ids."""
     cursor = connection.cursor()
     channel_ids = []
     for channel_id, name in enumerate(CHANNEL_NAMES, start=1):
@@ -201,7 +177,6 @@ def insert_channels(connection):
 
 
 def insert_customers(connection, num_customers):
-    """Insert random customers. Returns the list of customer ids."""
     cursor = connection.cursor()
     customer_ids = []
     for customer_id in range(1, num_customers + 1):
@@ -219,14 +194,7 @@ def insert_customers(connection, num_customers):
 
 
 def insert_products(connection, num_products, category_ids):
-    """
-    Insert random products, spread across categories.
-
-    Returns a list of dicts (one per product) with the fields we will need
-    later when generating order_items: product_id, category_id, price and
-    unit_cost. Keeping this small lookup in memory avoids re-querying the
-    database for every single order item.
-    """
+    """Insert random products and return a lookup list needed later for order_items."""
     cursor = connection.cursor()
     products = []
     for product_id in range(1, num_products + 1):
@@ -238,7 +206,6 @@ def insert_products(connection, num_products, category_ids):
         sku = f"{category_name[:3].upper()}-{product_id:04d}"
 
         unit_cost = round(random.uniform(5, 200), 2)
-        # price is cost plus a random markup between 30% and 90%
         markup = random.uniform(1.3, 1.9)
         price = round(unit_cost * markup, 2)
 
@@ -261,12 +228,7 @@ def insert_products(connection, num_products, category_ids):
 
 
 def insert_orders_and_items(connection, num_orders, customer_ids, channel_ids, products):
-    """
-    Insert random orders, and 1-4 order_items for each order.
-
-    order_date is a random day within the last 2 years, so the warehouse
-    ends up with roughly two years of sales history to analyze trends over.
-    """
+    """Insert random orders, each with 1-4 order_items, spread over the last 2 years."""
     cursor = connection.cursor()
     today = date.today()
     two_years_ago = today - timedelta(days=730)
@@ -287,15 +249,11 @@ def insert_orders_and_items(connection, num_orders, customer_ids, channel_ids, p
         )
 
         num_items = random.randint(1, 4)
-        # An order should not list the same product twice, so we sample
-        # distinct products for its line items.
+        # sample() instead of choice() so an order never repeats a product
         chosen_products = random.sample(products, k=min(num_items, len(products)))
         for product in chosen_products:
             quantity = random.randint(1, 5)
-            # unit_price can drift slightly from the catalog price, just
-            # like real prices change over time.
             unit_price = round(product["price"] * random.uniform(0.95, 1.05), 2)
-            # Most items have no discount; sometimes there is a promotion.
             discount = random.choice([0.0, 0.0, 0.0, 0.05, 0.1, 0.15, 0.2])
 
             cursor.execute(
@@ -310,7 +268,7 @@ def insert_orders_and_items(connection, num_orders, customer_ids, channel_ids, p
 
 
 def export_tables_to_csv(connection, csv_dir):
-    """Write every OLTP table to its own CSV file, for easy manual inspection."""
+    """Write every OLTP table to its own CSV file in csv_dir."""
     csv_dir.mkdir(parents=True, exist_ok=True)
     table_names = ["categories", "channels", "customers", "products", "orders", "order_items"]
 
@@ -328,11 +286,9 @@ def export_tables_to_csv(connection, csv_dir):
 
 
 def main():
-    """Build the whole OLTP database and CSV export from scratch."""
     random.seed(RANDOM_SEED)
 
     SQLITE_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    # Delete any previous database file so this script can be re-run safely.
     if SQLITE_DB_PATH.exists():
         SQLITE_DB_PATH.unlink()
 

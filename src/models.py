@@ -1,11 +1,7 @@
 """
-Dataclasses describing the shape of one row in each star-schema table.
-
-These are NOT used to hold the actual data during the pipeline run (that
-job is done by pandas DataFrames, which are much faster for thousands of
-rows). Instead, they exist as clear, typed documentation: if you want to
-know exactly which columns dim_product has and what type each one is,
-read the DimProduct class below instead of hunting through transform.py.
+Dataclasses describing the columns of each star-schema table. Used as
+documentation/reference - the pipeline itself moves data around as
+pandas DataFrames, not instances of these classes.
 """
 
 from dataclasses import dataclass
@@ -14,9 +10,6 @@ from datetime import date
 
 @dataclass
 class DimDate:
-    """One calendar day, with the pre-computed parts (month, quarter, ...)
-    that analytical queries group and filter by."""
-
     date_key: int  # YYYYMMDD, e.g. 20250314
     full_date: date
     day: int
@@ -29,22 +22,17 @@ class DimDate:
 
 @dataclass
 class DimProduct:
-    """One product, with its category NAME already attached (denormalized)
-    so queries never need to join back to a separate categories table."""
-
     product_key: int  # surrogate key
     product_id: int  # original id from the OLTP source
     sku: str
     name: str
-    category: str
+    category: str  # denormalized from the categories table
     unit_cost: float
     price: float
 
 
 @dataclass
 class DimCustomer:
-    """One customer."""
-
     customer_key: int  # surrogate key
     customer_id: int
     name: str
@@ -54,8 +42,6 @@ class DimCustomer:
 
 @dataclass
 class DimChannel:
-    """One sales channel (e.g. Web Store, Mobile App)."""
-
     channel_key: int  # surrogate key
     channel_id: int
     name: str
@@ -63,12 +49,7 @@ class DimChannel:
 
 @dataclass
 class FactSale:
-    """
-    One row per order item (the fact table's grain).
-
-    Holds foreign keys pointing at the four dimensions, plus the measures
-    (the numbers you sum/average in analytical queries).
-    """
+    """One row per order item - the fact table's grain."""
 
     sale_key: int
     date_key: int

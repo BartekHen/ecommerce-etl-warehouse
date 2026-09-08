@@ -1,11 +1,6 @@
--- Example OLAP analytics queries (DQL - Data Query Language).
---
--- These show the kind of question the star schema is designed to answer
--- quickly. Every query only ever needs to JOIN fact_sales to one or two
--- dimension tables - no deep chains of joins like you would need on the
--- normalized OLTP source. Run them with the DuckDB CLI, e.g.:
+-- Example OLAP queries. Every one JOINs fact_sales to just one or two
+-- dimension tables - that's the point of the star schema. Run with:
 --   duckdb warehouse.duckdb < sql/analytics_queries.sql
--- or paste one query at a time into a DuckDB / Python session.
 
 
 -- 1. Revenue and margin per sales channel and month.

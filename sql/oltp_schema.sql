@@ -1,14 +1,8 @@
--- Reference DDL (Data Definition Language) for the OLTP source database.
+-- Reference DDL for the OLTP source (SQLite), normalized to 3NF: a
+-- category name lives only in "categories", never copied into "products".
 --
--- This file documents the schema that data/generate_data.py builds in
--- SQLite. It is normalized to 3rd Normal Form (3NF): every piece of
--- information is stored exactly once (e.g. a category name lives only in
--- "categories", never copied into "products"). This is typical for an
--- OLTP (OnLine Transaction Processing) system: it is optimized for fast,
--- safe writes of individual orders, not for big analytical reads.
---
--- generate_data.py creates these tables itself in Python (so this file is
--- not executed automatically), but it follows exactly this structure.
+-- generate_data.py builds this same schema itself in Python; this file
+-- is not executed, it's here for reference.
 
 CREATE TABLE categories (
     category_id INTEGER PRIMARY KEY,

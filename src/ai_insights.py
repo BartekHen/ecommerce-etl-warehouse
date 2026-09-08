@@ -21,12 +21,9 @@ MAX_ROWS_PER_QUERY = 40
 
 
 def load_queries():
-    """Parse analytics_queries.sql into a list of (label, sql) pairs.
-
-    Queries in the file are separated by a blank line before and after, so
-    splitting on a double blank line gives one block per query. The file's
-    own header comment (no SQL in it) has no SELECT and gets skipped.
-    """
+    # queries in the file are separated by a blank line, so splitting on
+    # that gives one block per query (the file's header comment has no
+    # SQL in it and gets skipped below)
     text = ANALYTICS_QUERIES_PATH.read_text()
     blocks = [block.strip() for block in text.split("\n\n\n") if block.strip()]
 

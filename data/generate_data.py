@@ -194,7 +194,6 @@ def insert_customers(connection, num_customers):
 
 
 def insert_products(connection, num_products, category_ids):
-    """Insert random products and return a lookup list needed later for order_items."""
     cursor = connection.cursor()
     products = []
     for product_id in range(1, num_products + 1):
@@ -228,7 +227,6 @@ def insert_products(connection, num_products, category_ids):
 
 
 def insert_orders_and_items(connection, num_orders, customer_ids, channel_ids, products):
-    """Insert random orders, each with 1-4 order_items, spread over the last 2 years."""
     cursor = connection.cursor()
     today = date.today()
     two_years_ago = today - timedelta(days=730)
@@ -268,7 +266,6 @@ def insert_orders_and_items(connection, num_orders, customer_ids, channel_ids, p
 
 
 def export_tables_to_csv(connection, csv_dir):
-    """Write every OLTP table to its own CSV file in csv_dir."""
     csv_dir.mkdir(parents=True, exist_ok=True)
     table_names = ["categories", "channels", "customers", "products", "orders", "order_items"]
 

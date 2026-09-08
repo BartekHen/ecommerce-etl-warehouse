@@ -18,10 +18,8 @@ class Loader:
         self.duckdb_path = duckdb_path
 
     def create_schema(self, connection):
-        # Drop child before parents, then recreate from the schema script,
-        # so tables are always empty before the load - DuckDB won't allow
-        # deleting dimension rows still referenced by fact_sales, even
-        # after fact_sales itself was just cleared in the same transaction.
+        # drop child before parents, then recreate - DuckDB won't let you
+        # delete a dim row still referenced by fact_sales, even mid-transaction
         connection.execute("DROP TABLE IF EXISTS fact_sales")
         for table_name in DIMENSION_TABLES:
             connection.execute(f"DROP TABLE IF EXISTS {table_name}")
@@ -29,21 +27,15 @@ class Loader:
         connection.execute(schema_sql)
 
     def _create_indexes(self, connection):
-        # Built after the load, not before: an index gets updated on every
-        # insert, so indexing empty tables and then bulk-loading is cheaper
-        # than maintaining the index across thousands of individual inserts.
+        # built after the load - cheaper than updating the index on every insert
         connection.execute("CREATE INDEX IF NOT EXISTS idx_fact_date ON fact_sales(date_key)")
         connection.execute("CREATE INDEX IF NOT EXISTS idx_fact_product ON fact_sales(product_key)")
         connection.execute("CREATE INDEX IF NOT EXISTS idx_fact_customer ON fact_sales(customer_key)")
         connection.execute("CREATE INDEX IF NOT EXISTS idx_fact_channel ON fact_sales(channel_key)")
 
     def load_all(self, dim_date, dim_product, dim_customer, dim_channel, fact_sales):
-        """
-        Load every table into DuckDB inside a single transaction, so the
-        warehouse either ends up fully updated or not touched at all - if
-        anything fails partway through, we roll back instead of leaving
-        old and new data mixed together.
-        """
+        # everything happens in one transaction - either it all loads, or
+        # nothing does, no half-updated warehouse
         dimension_frames = {
             "dim_date": dim_date,
             "dim_product": dim_product,

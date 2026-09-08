@@ -19,8 +19,7 @@ class Extractor:
         self.sqlite_path = sqlite_path
 
     def _read_table(self, table_name):
-        # New connection per call - sqlite3 connections aren't safe to
-        # share across threads, and extract_all() calls this from a pool.
+        # new connection per call, sqlite3 connections aren't thread-safe
         connection = sqlite3.connect(self.sqlite_path)
         try:
             dataframe = pd.read_sql(f"SELECT * FROM {table_name}", connection)
@@ -47,17 +46,8 @@ class Extractor:
         return self._read_table("order_items")
 
     def extract_all(self):
-        """
-        Read all six tables at once using a thread pool.
-
-        This helps because reading from SQLite is I/O-bound - most of the
-        time a thread spends here is waiting on disk, not running Python.
-        CPython releases the GIL while a thread waits on I/O, so the reads
-        overlap instead of running one after another. This wouldn't help
-        for CPU-bound work (e.g. crunching numbers in a loop), since the
-        GIL only lets one thread run Python bytecode at a time - that case
-        would need multiprocessing instead.
-        """
+        # reads are I/O-bound (waiting on SQLite), so threads help here
+        # even with the GIL - wouldn't be true for CPU-bound work
         results = {}
         with ThreadPoolExecutor(max_workers=len(TABLE_NAMES)) as executor:
             future_to_table = {

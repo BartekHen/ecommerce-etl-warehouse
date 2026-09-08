@@ -33,10 +33,7 @@ class Transformer:
         return pd.DataFrame(rows)
 
     def build_dim_product(self, products_df, categories_df):
-        """
-        Pull the category name onto each product row (denormalization),
-        so sales can later be grouped by category with no extra JOIN.
-        """
+        # denormalize: copy the category name onto the product row
         categories_renamed = categories_df.rename(columns={"name": "category"})
         merged = products_df.merge(categories_renamed, on="category_id", how="left")
 
@@ -55,14 +52,8 @@ class Transformer:
         return dim_channel
 
     def build_fact_sales(self, order_items_df, orders_df, dim_date, dim_product, dim_customer, dim_channel):
-        """
-        One row per order_item, with dimension keys and the sales measures.
-        Only "completed" orders count as sales - pending/cancelled orders
-        aren't real revenue.
-        """
+        # only completed orders count as sales
         completed_orders = orders_df[orders_df["status"] == "completed"]
-
-        # inner join also drops order_items whose order wasn't completed
         fact = order_items_df.merge(completed_orders, on="order_id", how="inner")
 
         fact["date_key"] = pd.to_datetime(fact["order_date"]).dt.strftime("%Y%m%d").astype(int)

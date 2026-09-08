@@ -156,6 +156,38 @@ python3 -c "import duckdb; duckdb.connect('warehouse.duckdb').sql('SELECT * FROM
 # or open sql/analytics_queries.sql and run individual queries against warehouse.duckdb
 ```
 
+## Power BI Dashboard
+
+The warehouse can be loaded straight into Power BI Desktop as a set of
+Parquet files - no direct DuckDB connector needed.
+
+1. Run the pipeline, then export the warehouse to Parquet:
+   ```bash
+   python -m src.pipeline
+   python -m src.export_powerbi
+   ```
+   This writes one `.parquet` file per table into `powerbi_export/`
+   (`dim_date.parquet`, `dim_product.parquet`, `dim_customer.parquet`,
+   `dim_channel.parquet`, `fact_sales.parquet`).
+2. Open **Power BI Desktop** -> **Get Data** -> **Folder**, and point it at
+   the `powerbi_export/` folder (or use the **Parquet** connector on each
+   file individually if you prefer picking them one by one).
+3. Load all five tables, then go to the **Model** view and draw the
+   relationships yourself: `fact_sales.date_key` -> `dim_date.date_key`,
+   `fact_sales.product_key` -> `dim_product.product_key`,
+   `fact_sales.customer_key` -> `dim_customer.customer_key`,
+   `fact_sales.channel_key` -> `dim_channel.channel_key`. Each is a
+   one-dimension-to-many-fact relationship, same shape as the Mermaid
+   diagram above.
+4. Build a few visuals, e.g.:
+   - Line chart: `dim_date.month_name` (X-axis) vs. `SUM(fact_sales.net_amount)`
+   - Bar chart: `dim_product.name` (X-axis) vs. `SUM(fact_sales.net_amount)`,
+     sorted descending, top 10
+   - Bar chart: `dim_channel.name` (X-axis) vs. `SUM(fact_sales.margin)`
+
+Re-run both commands above any time the underlying data changes, then hit
+**Refresh** in Power BI to pick up the new Parquet files.
+
 ## Example analytical questions this warehouse answers
 
 See `sql/analytics_queries.sql` for the full, runnable versions:

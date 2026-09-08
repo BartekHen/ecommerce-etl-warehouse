@@ -14,6 +14,9 @@ SQLITE_DB_PATH = DATA_DIR / "oltp.sqlite"
 # --- OLAP warehouse (DuckDB) ---
 DUCKDB_PATH = BASE_DIR / "warehouse.duckdb"
 
+# --- Power BI export (Parquet files for Get Data -> Folder) ---
+POWERBI_EXPORT_DIR = BASE_DIR / "powerbi_export"
+
 # --- SQL scripts ---
 SQL_DIR = BASE_DIR / "sql"
 OLTP_SCHEMA_PATH = SQL_DIR / "oltp_schema.sql"

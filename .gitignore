@@ -2,6 +2,7 @@
 *.duckdb
 *.sqlite
 data/csv/
+powerbi_export/*.parquet
 
 # Python
 __pycache__/

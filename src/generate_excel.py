@@ -1,8 +1,6 @@
 """
-Builds an Excel workbook straight from the warehouse: a real Excel Table,
-SUMIFS/XLOOKUP/LARGE formulas, charts, and a budget-vs-actual sheet.
-Formulas are written as formulas, not pre-computed values, so opening the
-file in Excel actually recalculates everything.
+Builds an Excel workbook from the warehouse - real formulas, not pasted
+values, so it actually recalculates when you open it.
 
 Run with: python -m src.generate_excel
 """
@@ -83,8 +81,7 @@ def build_raw_data_sheet(wb, rows):
     n_rows = len(rows) + 1
     n_cols = len(HEADERS)
 
-    # Period is a live formula, not pre-computed, so it's visible in the
-    # sheet how the month grouping actually works
+    # Period as a formula, not a value someone typed in
     period_col = n_cols + 1
     for r in range(2, n_rows + 1):
         ws.cell(row=r, column=period_col, value=f'=TEXT(A{r},"yyyy-mm")')
@@ -186,8 +183,7 @@ def build_summary_sheet(wb, categories, channels, periods, products):
         c.font = HEADER_FONT
     top_start_row = top_header_row + 1
 
-    # helper columns (H:I) hold every product's revenue - LARGE/INDEX/MATCH
-    # above search this range to build the ranking
+    # H:I is a helper table LARGE/INDEX/MATCH above search through
     helper_col_product, helper_col_revenue = 8, 9
     ws.cell(row=top_header_row, column=helper_col_product, value="All Products (helper)").font = Font(italic=True, color="808080")
     ws.cell(row=top_header_row, column=helper_col_revenue, value="Revenue").font = Font(italic=True, color="808080")
@@ -310,8 +306,8 @@ def build_fpa_sheet(wb, periods, actual_by_period):
         c.font = HEADER_FONT
     start_row = header_row + 1
 
-    # budget is a planning input, not derived from the actuals it's being
-    # compared against: prior-year same month + the growth assumption above
+    # budget = prior-year same month + growth assumption, not derived
+    # from the actuals it's compared against
     for i, period in enumerate(periods):
         r = start_row + i
         prior_year_period = f"{int(period[:4]) - 1}{period[4:]}"

@@ -29,6 +29,9 @@ INSIGHTS_DIR = BASE_DIR / "insights"
 # --- README chart images ---
 DOCS_IMAGES_DIR = BASE_DIR / "docs" / "images"
 
+# --- Excel workbook ---
+EXCEL_PATH = BASE_DIR / "excel" / "ecommerce-excel-analysis.xlsx"
+
 # --- Data generation settings ---
 RANDOM_SEED = 42
 NUM_CUSTOMERS = 300

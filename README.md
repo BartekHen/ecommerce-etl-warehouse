@@ -257,6 +257,34 @@ generator only has ~20 first and last names to pick from) - filter on
 Re-run the pipeline and export whenever the underlying data changes, then
 hit Refresh in Power BI to pick up the new files.
 
+## The Excel workbook
+
+I wanted something that showed I can actually build a spreadsheet, not
+just click through a wizard, so this one runs on live formulas rather
+than pasted-in numbers - open it and everything recalculates.
+
+[`excel/ecommerce-excel-analysis.xlsx`](excel/ecommerce-excel-analysis.xlsx)
+has four tabs:
+
+- **Raw Data** - the same ~4,700 order-item rows as the warehouse, as a
+  real Excel Table (`SalesData`), with a `Period` column driven by
+  `=TEXT(date,"yyyy-mm")` instead of being typed in
+- **Summary** - revenue/margin by category, channel and month via
+  `SUMIFS`, plus a top-10-products ranking built with `LARGE` +
+  `INDEX`/`MATCH`, and a small `XLOOKUP` box where you can type a
+  product name and get its revenue back
+- **Dashboard** - the same KPIs and charts as the Power BI version,
+  built with regular chart objects referencing the Summary sheet
+- **FP&A - Budget vs Actual** - a monthly budget/actual/variance table.
+  The "budget" column is an input (prior-year same month + a growth %
+  you can edit), actuals come from `SUMIFS`, and variance is
+  conditionally formatted green/red
+
+Regenerate it after a pipeline run with:
+```bash
+python -m src.generate_excel
+```
+
 ## Questions this warehouse can answer
 
 Full queries are in `sql/analytics_queries.sql`:

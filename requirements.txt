@@ -2,3 +2,4 @@ pandas
 duckdb
 anthropic
 matplotlib
+openpyxl
